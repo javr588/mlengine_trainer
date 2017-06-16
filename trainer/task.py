@@ -1,485 +1,196 @@
-# Copyright 2016 The TensorFlow Authors. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
-
-"""This code implements a Feed forward neural network using TensorFlow Core APIs.
-   It implements a binary classifier for Census Income Dataset using both single
-   and distributed node cluster.
-"""
-
 import argparse
-import json
-import os
-import threading
-
-import tensorflow as tf
 
 import model
 
-tf.logging.set_verbosity(tf.logging.INFO)
+import tensorflow as tf
+from tensorflow.contrib.learn.python.learn import learn_runner
+from tensorflow.contrib.learn.python.learn.utils import (
+    saved_model_export_utils)
 
 
-class EvaluationRunHook(tf.train.SessionRunHook):
-  """EvaluationRunHook performs continuous evaluation of the model.
+def generate_experiment_fn(train_files,
+                           eval_files,
+                           num_epochs=None,
+                           train_batch_size=40,
+                           eval_batch_size=40,
+                           embedding_size=8,
+                           first_layer_size=100,
+                           num_layers=4,
+                           scale_factor=0.7,
+                           **experiment_args):
+  """Create an experiment function given hyperparameters.
 
-  Args:
-    checkpoint_dir (string): Dir to store model checkpoints
-    metric_dir (string): Dir to store metrics like accuracy and auroc
-    graph (tf.Graph): Evaluation graph
-    eval_frequency (int): Frequency of evaluation every n train steps
-    eval_steps (int): Evaluation steps to be performed
+  See command line help text for description of args.
+  Returns:
+    A function (output_dir) -> Experiment where output_dir is a string
+    representing the location of summaries, checkpoints, and exports.
+    this function is used by learn_runner to create an Experiment which
+    executes model code provided in the form of an Estimator and
+    input functions.
+
+    All listed arguments in the outer function are used to create an
+    Estimator, and input functions (training, evaluation, serving).
+    Unlisted args are passed through to Experiment.
   """
-  def __init__(self,
-               checkpoint_dir,
-               metric_dict,
-               graph,
-               eval_frequency,
-               eval_steps=None,
-               **kwargs):
-
-    self._eval_steps = eval_steps
-    self._checkpoint_dir = checkpoint_dir
-    self._kwargs = kwargs
-    self._eval_every = eval_frequency
-    self._latest_checkpoint = None
-    self._checkpoints_since_eval = 0
-    self._graph = graph
-
-    # With the graph object as default graph
-    # See https://www.tensorflow.org/api_docs/python/tf/Graph#as_default
-    # Adds ops to the graph object
-    with graph.as_default():
-      value_dict, update_dict = tf.contrib.metrics.aggregate_metric_map(
-          metric_dict)
-
-      # Creates a Summary protocol buffer by merging summaries
-      # See https://github.com/tensorflow/tensorflow/blob/master/tensorflow/core/framework/summary.proto
-      self._summary_op = tf.summary.merge([
-          tf.summary.scalar(name, value_op)
-          for name, value_op in value_dict.iteritems()
-      ])
-
-      # Saver class add ops to save and restore
-      # variables to and from checkpoint
-      self._saver = tf.train.Saver()
-
-      # Creates a global step to contain a counter for
-      # the global training step
-      self._gs = tf.contrib.framework.get_or_create_global_step()
-
-      self._final_ops_dict = value_dict
-      self._eval_ops = update_dict.values()
-
-
-    # MonitoredTrainingSession runs hooks in background threads
-    # and it doesn't wait for the thread from the last session.run()
-    # call to terminate to invoke the next hook, hence locks.
-    self._eval_lock = threading.Lock()
-    self._checkpoint_lock = threading.Lock()
-    self._file_writer = tf.summary.FileWriter(
-        os.path.join(checkpoint_dir, 'eval'), graph=graph)
-
-  def after_run(self, run_context, run_values):
-    # Always check for new checkpoints in case a single evaluation
-    # takes longer than checkpoint frequency and _eval_every is >1
-    self._update_latest_checkpoint()
-
-    if self._eval_lock.acquire(False):
-      try:
-        if self._checkpoints_since_eval > self._eval_every:
-          self._checkpoints_since_eval = 0
-          self._run_eval()
-      finally:
-        self._eval_lock.release()
-
-  def _update_latest_checkpoint(self):
-    """Update the latest checkpoint file created in the output dir."""
-    if self._checkpoint_lock.acquire(False):
-      try:
-        latest = tf.train.latest_checkpoint(self._checkpoint_dir)
-        if not latest == self._latest_checkpoint:
-          self._checkpoints_since_eval += 1
-          self._latest_checkpoint = latest
-      finally:
-        self._checkpoint_lock.release()
-
-  def end(self, session):
-    """Called at then end of session to make sure we always evaluate."""
-    self._update_latest_checkpoint()
-
-    with self._eval_lock:
-      self._run_eval()
-
-  def _run_eval(self):
-    """Run model evaluation and generate summaries."""
-    coord = tf.train.Coordinator(clean_stop_exception_types=(
-        tf.errors.CancelledError, tf.errors.OutOfRangeError))
-
-    with tf.Session(graph=self._graph) as session:
-      # Restores previously saved variables from latest checkpoint
-      self._saver.restore(session, self._latest_checkpoint)
-
-      session.run([
-        tf.tables_initializer(),
-        tf.local_variables_initializer()
-      ])
-      tf.train.start_queue_runners(coord=coord, sess=session)
-      train_step = session.run(self._gs)
-
-      tf.logging.info('Starting Evaluation For Step: {}'.format(train_step))
-      with coord.stop_on_exception():
-        eval_step = 0
-        while self._eval_steps is None or eval_step < self._eval_steps:
-          summaries, final_values, _ = session.run(
-              [self._summary_op, self._final_ops_dict, self._eval_ops])
-          if eval_step % 100 == 0:
-            tf.logging.info("On Evaluation Step: {}".format(eval_step))
-          eval_step += 1
-
-      # Write the summaries
-      self._file_writer.add_summary(summaries, global_step=train_step)
-      self._file_writer.flush()
-      tf.logging.info(final_values)
-
-
-def run(target,
-        is_chief,
-        train_steps,
-        eval_steps,
-        job_dir,
+  def _experiment_fn(output_dir):
+    # num_epochs can control duration if train_steps isn't
+    # passed to Experiment
+    train_input = model.generate_input_fn(
         train_files,
+        num_epochs=num_epochs,
+        batch_size=train_batch_size,
+    )
+    # Don't shuffle evaluation data
+    eval_input = model.generate_input_fn(
         eval_files,
-        train_batch_size,
-        eval_batch_size,
-        learning_rate,
-        eval_frequency,
-        first_layer_size,
-        num_layers,
-        scale_factor,
-        eval_num_epochs,
-        num_epochs):
-
-  """Run the training and evaluation graph.
-
-  Args:
-    target (string): Tensorflow server target
-    is_chief (bool): Boolean flag to specify a chief server
-    train_steps (int): Maximum number of training steps
-    eval_steps (int): Number of steps to run evaluation for at each checkpoint
-    job_dir (string): Output dir for checkpoint and summary
-    train_files (string): List of CSV files to read train data
-    eval_files (string): List of CSV files to read eval data
-    train_batch_size (int): Batch size for training
-    eval_batch_size (int): Batch size for evaluation
-    learning_rate (float): Learning rate for Gradient Descent
-    eval_frequency (int): Run evaluation frequency every n training steps.
-                          Do not evaluate too frequently otherwise you will
-                          pay for performance and do not evaluate too in-frequently
-                          otherwise you will not know how soon to stop training.
-                          Use default values to start with
-    first_layer_size (int): Size of the first DNN layer
-    num_layers (int): Number of hidden layers in the DNN
-    scale_factor (float): Decay rate for the size of hidden layers
-    eval_num_epochs (int): Number of epochs during evaluation
-    num_epochs (int): Maximum number of training data epochs on which to train
-  """
-
-  # Calculate the number of hidden units
-  hidden_units=[
-      max(2, int(first_layer_size * scale_factor**i))
-      for i in range(num_layers)
-  ]
-
-  # If the server is chief which is `master`
-  # In between graph replication Chief is one node in
-  # the cluster with extra responsibility and by default
-  # is worker task zero. We have assigned master as the chief.
-  #
-  # See https://youtu.be/la_M6bCV91M?t=1203 for details on
-  # distributed TensorFlow and motivation about chief.
-  if is_chief:
-    tf.logging.info("Created DNN hidden units {}".format(hidden_units))
-    evaluation_graph = tf.Graph()
-    with evaluation_graph.as_default():
-
-      # Features and label tensors
-      features, labels = model.input_fn(
-          eval_files,
-          num_epochs=eval_num_epochs,
-          batch_size=eval_batch_size,
-          shuffle=False
-      )
-      # Accuracy and AUROC metrics
-      # model.model_fn returns the dict when EVAL mode
-      metric_dict = model.model_fn(
-          model.EVAL,
-          features,
-          labels,
-          hidden_units=hidden_units,
-          learning_rate=learning_rate
-      )
-
-    hooks = [EvaluationRunHook(
-        job_dir,
-        metric_dict,
-        evaluation_graph,
-        eval_frequency,
-        eval_steps=eval_steps,
-    )]
-  else:
-    hooks = []
-
-  # Create a new graph and specify that as default
-  with tf.Graph().as_default():
-    # Placement of ops on devices using replica device setter
-    # which automatically places the parameters on the `ps` server
-    # and the `ops` on the workers
-    #
-    # See https://www.tensorflow.org/api_docs/python/tf/train/replica_device_setter
-    with tf.device(tf.train.replica_device_setter()):
-
-      # Features and label tensors as read using filename queue
-      features, labels = model.input_fn(
-          train_files,
-          num_epochs=num_epochs,
-          batch_size=train_batch_size
-      )
-
-      # Returns the training graph and global step tensor
-      train_op, global_step_tensor = model.model_fn(
-          model.TRAIN,
-          features,
-          labels,
-          hidden_units=hidden_units,
-          learning_rate=learning_rate
-      )
-
-
-    # Creates a MonitoredSession for training
-    # MonitoredSession is a Session-like object that handles
-    # initialization, recovery and hooks
-    # https://www.tensorflow.org/api_docs/python/tf/train/MonitoredTrainingSession
-    with tf.train.MonitoredTrainingSession(master=target,
-                                           is_chief=is_chief,
-                                           checkpoint_dir=job_dir,
-                                           hooks=hooks,
-                                           save_checkpoint_secs=20,
-                                           save_summaries_steps=50) as session:
-
-      # Tuple of exceptions that should cause a clean stop of the coordinator
-      # https://www.tensorflow.org/api_guides/python/train#Coordinator_and_QueueRunner
-      coord = tf.train.Coordinator(clean_stop_exception_types=(
-          tf.errors.CancelledError, tf.errors.OutOfRangeError))
-
-      # Important to start all queue runners so that data is available
-      # for reading
-      tf.train.start_queue_runners(coord=coord, sess=session)
-
-      # Global step to keep track of global number of steps particularly in
-      # distributed setting
-      step = global_step_tensor.eval(session=session)
-
-      # Run the training graph which returns the step number as tracked by
-      # the global step tensor.
-      # When train epochs is reached, coord.should_stop() will be true.
-      with coord.stop_on_exception():
-        while (train_steps is None or step < train_steps) and not coord.should_stop():
-          step, _ = session.run([global_step_tensor, train_op])
-
-    # Find the filename of the latest saved checkpoint file
-    latest_checkpoint = tf.train.latest_checkpoint(job_dir)
-
-    # Only perform this if chief
-    if is_chief:
-      build_and_run_exports(latest_checkpoint,
-                            job_dir,
-                            'CSV',
-                            model.csv_serving_input_fn,
-                            hidden_units)
-      build_and_run_exports(latest_checkpoint,
-                            job_dir,
-                            'JSON',
-                            model.json_serving_input_fn,
-                            hidden_units)
-      build_and_run_exports(latest_checkpoint,
-                            job_dir,
-                            'EXAMPLE',
-                            model.example_serving_input_fn,
-                            hidden_units)
-
-def build_and_run_exports(latest, job_dir, name, serving_input_fn, hidden_units):
-  """Given the latest checkpoint file export the saved model.
-
-  Args:
-    latest (string): Latest checkpoint file
-    job_dir (string): Location of checkpoints and model files
-    name (string): Name of the checkpoint to be exported. Used in building the
-      export path.
-    hidden_units (list): Number of hidden units
-    learning_rate (float): Learning rate for the SGD
-  """
-
-  prediction_graph = tf.Graph()
-  exporter = tf.saved_model.builder.SavedModelBuilder(
-      os.path.join(job_dir, 'export', name))
-  with prediction_graph.as_default():
-    features, inputs_dict = serving_input_fn()
-    prediction_dict = model.model_fn(
-        model.PREDICT,
-        features,
-        None,  # labels
-        hidden_units=hidden_units,
-        learning_rate=None  # learning_rate unused in prediction mode
+        batch_size=eval_batch_size,
+        shuffle=False
     )
-    saver = tf.train.Saver()
-
-    inputs_info = {
-        name: tf.saved_model.utils.build_tensor_info(tensor)
-        for name, tensor in inputs_dict.iteritems()
-    }
-    output_info = {
-        name: tf.saved_model.utils.build_tensor_info(tensor)
-        for name, tensor in prediction_dict.iteritems()
-    }
-    signature_def = tf.saved_model.signature_def_utils.build_signature_def(
-        inputs=inputs_info,
-        outputs=output_info,
-        method_name=tf.saved_model.signature_constants.PREDICT_METHOD_NAME
+    return tf.contrib.learn.Experiment(
+        model.build_estimator(
+            output_dir,
+            embedding_size=embedding_size,
+            # Construct layers sizes with exponetial decay
+            hidden_units=[
+                max(2, int(first_layer_size * scale_factor**i))
+                for i in range(num_layers)
+            ]
+        ),
+        train_input_fn=train_input,
+        eval_input_fn=eval_input,
+        # export strategies control the prediction graph structure
+        # of exported binaries.
+        export_strategies=[saved_model_export_utils.make_export_strategy(
+            model.serving_input_fn,
+            default_output_alternative_key=None,
+            exports_to_keep=1
+        )],
+        **experiment_args
     )
+  return _experiment_fn
 
 
-  with tf.Session(graph=prediction_graph) as session:
-    session.run([tf.local_variables_initializer(), tf.tables_initializer()])
-    saver.restore(session, latest)
-    exporter.add_meta_graph_and_variables(
-        session,
-        tags=[tf.saved_model.tag_constants.SERVING],
-        signature_def_map={
-            tf.saved_model.signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY: signature_def
-        },
-    )
-
-  exporter.save()
-
-
-def dispatch(*args, **kwargs):
-  """Parse TF_CONFIG to cluster_spec and call run() method
-  TF_CONFIG environment variable is available when running using
-  gcloud either locally or on cloud. It has all the information required
-  to create a ClusterSpec which is important for running distributed code.
-  """
-
-  tf_config = os.environ.get('TF_CONFIG')
-
-  # If TF_CONFIG is not available run local
-  if not tf_config:
-    return run('', True, *args, **kwargs)
-
-  tf_config_json = json.loads(tf_config)
-
-  cluster = tf_config_json.get('cluster')
-  job_name = tf_config_json.get('task', {}).get('type')
-  task_index = tf_config_json.get('task', {}).get('index')
-
-  # If cluster information is empty run local
-  if job_name is None or task_index is None:
-    return run('', True, *args, **kwargs)
-
-  cluster_spec = tf.train.ClusterSpec(cluster)
-  server = tf.train.Server(cluster_spec,
-                           job_name=job_name,
-                           task_index=task_index)
-
-  # Wait for incoming connections forever
-  # Worker ships the graph to the ps server
-  # The ps server manages the parameters of the model.
-  #
-  # See a detailed video on distributed TensorFlow
-  # https://www.youtube.com/watch?v=la_M6bCV91M
-  if job_name == 'ps':
-    server.join()
-    return
-  elif job_name in ['master', 'worker']:
-    return run(server.target, job_name == 'master', *args, **kwargs)
-
-
-
-if __name__ == "__main__":
+if __name__ == '__main__':
   parser = argparse.ArgumentParser()
-  parser.add_argument('--train-files',
-                      required=True,
-                      type=str,
-                      help='Training files local or GCS', nargs='+')
-  parser.add_argument('--eval-files',
-                      required=True,
-                      type=str,
-                      help='Evaluation files local or GCS', nargs='+')
-  parser.add_argument('--job-dir',
-                      required=True,
-                      type=str,
-                      help='GCS or local dir to write checkpoints and export model')
-  parser.add_argument('--train-steps',
-                      type=int,
-                      help="""\
-                       Maximum number of training steps to perform
-                       Training steps are in the units of training-batch-size.
-                       So if train-steps is 500 and train-batch-size if 100 then
-                       at most 500 * 100 training instances will be used to train.
-                      """)
-  parser.add_argument('--eval-steps',
-                      help='Number of steps to run evalution for at each checkpoint',
-                      default=100,
-                      type=int)
-  parser.add_argument('--train-batch-size',
-                      type=int,
-                      default=40,
-                      help='Batch size for training steps')
-  parser.add_argument('--eval-batch-size',
-                      type=int,
-                      default=40,
-                      help='Batch size for evaluation steps')
-  parser.add_argument('--learning-rate',
-                      type=float,
-                      default=0.003,
-                      help='Learning rate for SGD')
-  parser.add_argument('--eval-frequency',
-                      default=50,
-                      help='Perform one evaluation per n steps')
-  parser.add_argument('--first-layer-size',
-                     type=int,
-                     default=256,
-                     help='Number of nodes in the first layer of DNN')
-  parser.add_argument('--num-layers',
-                     type=int,
-                     default=2,
-                     help='Number of layers in DNN')
-  parser.add_argument('--scale-factor',
-                     type=float,
-                     default=0.25,
-                     help="""\
-                      Rate of decay size of layer for Deep Neural Net.
-                      max(2, int(first_layer_size * scale_factor**i)) \
-                      """)
-  parser.add_argument('--eval-num-epochs',
-                     type=int,
-                     default=1,
-                     help='Number of epochs during evaluation')
-  parser.add_argument('--num-epochs',
-                      type=int,
-                      help='Maximum number of epochs on which to train')
+  # Input Arguments
+  parser.add_argument(
+      '--train-files',
+      help='GCS or local paths to training data',
+      nargs='+',
+      required=True
+  )
+  parser.add_argument(
+      '--num-epochs',
+      help="""\
+      Maximum number of training data epochs on which to train.
+      If both --max-steps and --num-epochs are specified,
+      the training job will run for --max-steps or --num-epochs,
+      whichever occurs first. If unspecified will run for --max-steps.\
+      """,
+      type=int,
+  )
+  parser.add_argument(
+      '--train-batch-size',
+      help='Batch size for training steps',
+      type=int,
+      default=40
+  )
+  parser.add_argument(
+      '--eval-batch-size',
+      help='Batch size for evaluation steps',
+      type=int,
+      default=40
+  )
+  parser.add_argument(
+      '--train-steps',
+      help="""\
+      Steps to run the training job for. If --num-epochs is not specified,
+      this must be. Otherwise the training job will run indefinitely.\
+      """,
+      type=int
+  )
+  parser.add_argument(
+      '--eval-steps',
+      help='Number of steps to run evalution for at each checkpoint',
+      default=100,
+      type=int
+  )
+  parser.add_argument(
+      '--eval-files',
+      help='GCS or local paths to evaluation data',
+      nargs='+',
+      required=True
+  )
+  # Training arguments
+  parser.add_argument(
+      '--embedding-size',
+      help='Number of embedding dimensions for categorical columns',
+      default=8,
+      type=int
+  )
+  parser.add_argument(
+      '--first-layer-size',
+      help='Number of nodes in the first layer of the DNN',
+      default=100,
+      type=int
+  )
+  parser.add_argument(
+      '--num-layers',
+      help='Number of layers in the DNN',
+      default=4,
+      type=int
+  )
+  parser.add_argument(
+      '--scale-factor',
+      help='How quickly should the size of the layers in the DNN decay',
+      default=0.7,
+      type=float
+  )
+  parser.add_argument(
+      '--job-dir',
+      help='GCS location to write checkpoints and export models',
+      required=True
+  )
 
-  parse_args, unknown = parser.parse_known_args()
+  # Argument to turn on all logging
+  parser.add_argument(
+      '--verbosity',
+      choices=[
+          'DEBUG',
+          'ERROR',
+          'FATAL',
+          'INFO',
+          'WARN'
+      ],
+      default=tf.logging.FATAL,
+      help='Set logging verbosity'
+  )
 
-  tf.logging.warn('Unknown arguments: {}'.format(unknown))
-  dispatch(**parse_args.__dict__)
+  # Experiment arguments
+  parser.add_argument(
+      '--eval-delay-secs',
+      help='How long to wait before running first evaluation',
+      default=10,
+      type=int
+  )
+  parser.add_argument(
+      '--min-eval-frequency',
+      help='Minimum number of training steps between evaluations',
+      default=1,
+      type=int
+  )
+
+  args = parser.parse_args()
+  arguments = args.__dict__
+  tf.logging.set_verbosity(arguments.pop('verbosity'))
+
+  job_dir = arguments.pop('job_dir')
+
+  print('Starting Census: Please lauch tensorboard to see results:\n'
+        'tensorboard --logdir=$MODEL_DIR')
+
+  # Run the training job
+  # learn_runner pulls configuration information from environment
+  # variables using tf.learn.RunConfig and uses this configuration
+  # to conditionally execute Experiment, or param server code
+  learn_runner.run(generate_experiment_fn(**arguments), job_dir)
