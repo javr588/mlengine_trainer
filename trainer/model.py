@@ -113,11 +113,7 @@ def build_estimator(model_dir, embedding_size=8, hidden_units=None):
       layers.embedding_column(pais, dimension=embedding_size),
       layers.embedding_column(dia, dimension=embedding_size),
       anio,
-      bueno,
-      malo,
-      mes,
-      tedioso,
-	  regular,
+      mes      
   ]
 
   return tf.contrib.learn.DNNLinearCombinedClassifier(
