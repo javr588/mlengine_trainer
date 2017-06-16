@@ -80,7 +80,7 @@ def build_estimator(model_dir, embedding_size=8, hidden_units=None):
   Returns:
     A DNNCombinedLinearClassifier
   """
-  (actividad,bueno,dia,pais) = INPUT_COLUMNS
+  (actividad,anio,bueno,dia,lugar,malo,mes,pais,regular,tedioso,tweet) = INPUT_COLUMNS
   """Build an estimator."""
 
   # Reused Transformations.
