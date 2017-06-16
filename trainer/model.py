@@ -100,14 +100,10 @@ def build_estimator(model_dir, embedding_size=8, hidden_units=None):
           [actividad, dia], hash_bucket_size=int(1e4)),
     actividad,
 	anio,
-	bueno,
 	dia,
 	lugar,
-	malo,
 	mes_bucket,
 	pais,
-	regular,
-	tedioso,
 	tweet
   ]
 
