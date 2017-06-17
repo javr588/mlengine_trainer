@@ -46,7 +46,7 @@ INPUT_COLUMNS = [
     # Continuous base columns.
     layers.real_valued_column('anio'),
     layers.real_valued_column('bueno'),
-    layers.real_valued_column('malo'),
+    layers.real_valued_column('malos'),
     layers.real_valued_column('mes'),
     layers.real_valued_column('regular'),
     layers.real_valued_column('tedioso'),
