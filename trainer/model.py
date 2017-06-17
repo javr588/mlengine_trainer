@@ -46,7 +46,7 @@ INPUT_COLUMNS = [
     # Continuous base columns.
     layers.real_valued_column('anio'),
     layers.real_valued_column('bueno'),
-    layers.real_valued_column('malo',dimension=1,default_value=None,dtype=tf.int64,normalizer=None),
+    layers.sparse_column_with_hash_bucket('malo', hash_bucket_size=1000),
     layers.real_valued_column('mes'),
     layers.real_valued_column('regular'),
     layers.real_valued_column('tedioso'),
