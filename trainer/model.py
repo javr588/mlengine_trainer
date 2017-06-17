@@ -56,7 +56,7 @@ INPUT_COLUMNS = [
     
 ]
 
-UNUSED_COLUMNS = set(CSV_COLUMNS) - {col.name for col in INPUT_COLUMNS} - {LABEL_COLUMN}
+UNUSED_COLUMNS = set(CSV_COLUMNS) - {col.name for col in INPUT_COLUMNS}
 
 def build_estimator(model_dir, embedding_size=8, hidden_units=None):
   """Build a wide and deep model for predicting income category.
