@@ -49,7 +49,7 @@ INPUT_COLUMNS = [
     layers.real_valued_column('malo'),
     layers.real_valued_column('mes'),
     layers.real_valued_column('regular'),
-	layers.real_valued_column('tedioso'),
+    layers.real_valued_column('tedioso'),
 ]
 
 UNUSED_COLUMNS = set(CSV_COLUMNS) - {col.name for col in INPUT_COLUMNS} - {LABEL_COLUMN}
@@ -98,13 +98,12 @@ def build_estimator(model_dir, embedding_size=8, hidden_units=None):
           [mes_bucket, actividad], hash_bucket_size=int(1e6)),
       layers.crossed_column(
           [actividad, dia], hash_bucket_size=int(1e4)),
-    actividad,
-	anio,
-	dia,
-	lugar,
-	mes_bucket,
-	pais,
-	tweet
+      actividad,
+      dia,
+      lugar,
+      mes_bucket,
+      pais,
+      tweet,
   ]
 
   deep_columns = [
@@ -113,7 +112,9 @@ def build_estimator(model_dir, embedding_size=8, hidden_units=None):
       layers.embedding_column(pais, dimension=embedding_size),
       layers.embedding_column(dia, dimension=embedding_size),
       anio,
-      mes      
+      mes,
+      bueno,
+      malo
   ]
 
   return tf.contrib.learn.DNNLinearCombinedClassifier(
