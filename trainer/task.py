@@ -186,7 +186,7 @@ if __name__ == '__main__':
 
   job_dir = arguments.pop('job_dir')
 
-  print('Starting Census: Please lauch tensorboard to see results:\n'
+  print('Starting Prediction: Please lauch tensorboard to see results:\n'
         'tensorboard --logdir=$MODEL_DIR')
 
   # Run the training job
