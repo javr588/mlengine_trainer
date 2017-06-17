@@ -37,19 +37,24 @@ INPUT_COLUMNS = [
    
     # Otherwise we can use a hashing function to bucket the categories
     layers.sparse_column_with_hash_bucket('actividad', hash_bucket_size=1000),
+	layers.real_valued_column('anio'),
+	layers.real_valued_column('bueno'),
     layers.sparse_column_with_hash_bucket('dia', hash_bucket_size=100),
-    layers.sparse_column_with_hash_bucket('lugar', hash_bucket_size=100),
-    layers.sparse_column_with_hash_bucket('pais', hash_bucket_size=100),
+    layers.sparse_column_with_hash_bucket('lugar', hash_bucket_size=1000),
+	layers.real_valued_column('malo'),
+    layers.real_valued_column('mes'),
+	layers.sparse_column_with_hash_bucket('pais', hash_bucket_size=1000),
+	layers.real_valued_column('regular'),
+    layers.real_valued_column('tedioso'),
     layers.sparse_column_with_hash_bucket('tweet', hash_bucket_size=1000),
     
 
     # Continuous base columns.
-    layers.real_valued_column('anio'),
-    layers.real_valued_column('bueno'),
-    layers.sparse_column_with_hash_bucket('malo', hash_bucket_size=1000),
-    layers.real_valued_column('mes'),
-    layers.real_valued_column('regular'),
-    layers.real_valued_column('tedioso'),
+    
+    
+	
+    
+    
 ]
 
 UNUSED_COLUMNS = set(CSV_COLUMNS) - {col.name for col in INPUT_COLUMNS} - {LABEL_COLUMN}
