@@ -87,8 +87,7 @@ def build_estimator(model_dir, embedding_size=8, hidden_units=None):
   # Continuous columns can be converted to categorical via bucketization
   mes_bucket = layers.bucketized_column(
       mes, boundaries=[1,2,3,4,5,6])
-  malo_bucket = layers.bucketized_column(
-      malo, boundaries=[100000,200000,300000,400000,500000,600000,700000,800000,900000,1000000])
+
 	  
   # Wide columns and deep columns.
   wide_columns = [
@@ -116,7 +115,7 @@ def build_estimator(model_dir, embedding_size=8, hidden_units=None):
       anio,
       mes,
       bueno,
-      malo_bucket,
+      malo,
       tedioso,
       regular,
   ]
