@@ -114,7 +114,9 @@ def build_estimator(model_dir, embedding_size=8, hidden_units=None):
       anio,
       mes,
       bueno,
-      malo
+      malo,
+      tedioso,
+      regular,
   ]
 
   return tf.contrib.learn.DNNLinearCombinedClassifier(
