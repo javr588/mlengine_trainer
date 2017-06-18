@@ -90,7 +90,7 @@ def build_estimator(model_dir, embedding_size=8, hidden_units=None):
   # Reused Transformations.
   # Continuous columns can be converted to categorical via bucketization
   mes_bucket = layers.bucketized_column(
-      mes, boundaries=[1,2,3,4,5,6])
+      mes, boundaries=[1,2,3,4,5,6,7,8,9,10,11,12])
 
 	  
   # Wide columns and deep columns.
@@ -100,7 +100,7 @@ def build_estimator(model_dir, embedding_size=8, hidden_units=None):
       layers.crossed_column(
           [actividad, tweet], hash_bucket_size=int(1e4)),
       layers.crossed_column(
-          [mes_bucket, actividad], hash_bucket_size=int(1e6)),
+          [mes_bucket, actividad], hash_bucket_size=int(1e4)),
       layers.crossed_column(
           [actividad, dia], hash_bucket_size=int(1e4)),
       actividad,
