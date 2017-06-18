@@ -98,7 +98,7 @@ def build_estimator(model_dir, embedding_size=8, hidden_units=None):
       # Interactions between different categorical features can also
       # be added as new virtual features.
       layers.crossed_column(
-          [actividad, bueno], hash_bucket_size=int(1e4)),
+          [actividad, tweet], hash_bucket_size=int(1e4)),
       layers.crossed_column(
           [mes_bucket, actividad], hash_bucket_size=int(1e6)),
       layers.crossed_column(
