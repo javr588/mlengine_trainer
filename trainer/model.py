@@ -23,8 +23,8 @@ from tensorflow.contrib.learn.python.learn.utils import input_fn_utils
 
 
 # Define the format of your input data including unused columns
-CSV_COLUMNS = ['actividad','anio','bueno','dia','lugar','malo','mes','pais','regular','tedioso','tweet']
-CSV_COLUMN_DEFAULTS = [[''],[0],[0],[''],[''],[0],[0],[''],[0],[0],['']]
+CSV_COLUMNS = ['actividad','anio','bueno','dia','lugar','malo','mes','pais','regular','tedioso']
+CSV_COLUMN_DEFAULTS = [[''],[0],[0],[''],[''],[0],[0],[''],[0],[0]]
 LABEL_COLUMN = 'pais'
 LABELS = ['Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Antigua and Barbuda', 'Argentina', 'Armenia', 'Aruba', 'Australia', 'Austria', 'Azerbaijan', 'The Bahamas', 'Bahrain', 'Bangladesh', 'Barbados', 'Belarus', 'Belgium', 'Belize', 'Benin', 'Bhutan', 'Bolivia', 'Bosnia and Herzegovina', 'Botswana', 'Brazil', 'Brunei', 'Bulgaria', 'Burkina Faso', 'Burma', 'Burundi', 'Cambodia', 'Cameroon', 'Canada', 'Cabo Verde', 'Central African Republic', 'Chad', 'Chile', 'China', 'Colombia', 'Comoros', 'Congo, Republic of the', 'Costa Rica', 'Cote dIvoire', 'Croatia', 'Cuba', 'Curacao', 'Cyprus', 'Czechia', 'Denmark', 'Djibouti', 'Dominica', 'Dominican Republic', 'East Timor', 'Ecuador', 'Egypt', 'El Salvador', 'Equatorial Guinea', 'Eritrea', 'Estonia', 'Ethiopia', 'Fiji', 'Finland', 'France', 'Gabon', 'Georgia', 'Germany', 'Ghana', 'Greece', 'Grenada', 'Guatemala', 'Guinea', 'Guinea-Bissau', 'Guyana', 'Haiti', 'Holy See', 'Honduras', 'Hong Kong', 'Hungary', 'Iceland', 'India', 'Indonesia', 'Iran', 'Iraq', 'Ireland', 'Israel', 'Italy', 'Jamaica', 'Japan', 'Jordan', 'Kazakhstan', 'Kenya', 'Kiribati', 'Korea, North', 'Korea, South', 'Kosovo', 'Kuwait', 'Kyrgyzstan', 'Laos', 'Latvia', 'Lebanon', 'Lesotho', 'Liberia', 'Libya', 'Liechtenstein', 'Lithuania', 'Luxembourg', 'Macau', 'Macedonia', 'Madagascar', 'Malawi', 'Malaysia', 'Maldives', 'Mali', 'Malta', 'Marshall Islands', 'Mauritania', 'Mauritius', 'Mexico', 'Micronesia', 'Moldova', 'Monaco', 'Mongolia', 'Montenegro', 'Morocco', 'Mozambique', 'Namibia', 'Nauru', 'Nepal', 'Netherlands', 'New Zealand', 'Nicaragua', 'Niger', 'Nigeria', 'North Korea', 'Norway', 'Oman', 'Pakistan', 'Palau', 'Palestinian Territories', 'Panama', 'Papua New Guinea', 'Paraguay', 'Peru', 'Philippines', 'Poland', 'Portugal', 'Qatar', 'Romania', 'Russia', 'Rwanda', 'Saint Kitts and Nevis', 'Saint Lucia', 'Saint Vincent and the Grenadines', 'Samoa', 'San Marino', 'Sao Tome and Principe', 'Saudi Arabia', 'Senegal', 'Serbia', 'Seychelles', 'Sierra Leone', 'Singapore', 'Sint Maarten', 'Slovakia', 'Slovenia', 'Solomon Islands', 'Somalia', 'South Africa', 'South Korea', 'South Sudan', 'Spain', 'Sri Lanka', 'Sudan', 'Suriname', 'Swaziland', 'Sweden', 'Switzerland', 'Syria', 'Taiwan', 'Tajikistan', 'Tanzania', 'Thailand', 'Timor-Leste', 'Togo', 'Tonga', 'Trinidad and Tobago', 'Tunisia', 'Turkey', 'Turkmenistan', 'Tuvalu', 'Uganda', 'Ukraine', 'United Arab Emirates', 'United Kingdom', 'Uruguay', 'Uzbekistan', 'Vanuatu', 'Venezuela', 'Vietnam', 'Yemen', 'Zambia', 'Zimbabwe']
 # Define the initial ingestion of each feature used by your model.
@@ -45,14 +45,11 @@ INPUT_COLUMNS = [
     layers.real_valued_column('mes'),
 	layers.real_valued_column('regular'),
     layers.real_valued_column('tedioso'),
-    layers.sparse_column_with_hash_bucket('tweet', hash_bucket_size=1000),
+    
     
 
     # Continuous base columns.
-    
-    
-	
-    
+        
     
 ]
 
@@ -84,7 +81,7 @@ def build_estimator(model_dir, embedding_size=8, hidden_units=None):
   Returns:
     A DNNCombinedLinearClassifier
   """
-  (actividad,anio,bueno,dia,lugar,malo,mes,regular,tedioso,tweet) = INPUT_COLUMNS
+  (actividad,anio,bueno,dia,lugar,malo,mes,regular,tedioso) = INPUT_COLUMNS
   """Build an estimator."""
 
   # Reused Transformations.
@@ -98,16 +95,16 @@ def build_estimator(model_dir, embedding_size=8, hidden_units=None):
       # Interactions between different categorical features can also
       # be added as new virtual features.
       layers.crossed_column(
-          [actividad, tweet], hash_bucket_size=int(1e4)),
+          [actividad, lugar], hash_bucket_size=int(1e4)),
       layers.crossed_column(
-          [mes_bucket, actividad], hash_bucket_size=int(1e4)),
+          [actividad,mes_bucket], hash_bucket_size=int(1e4)),
       layers.crossed_column(
           [actividad, dia], hash_bucket_size=int(1e4)),
       actividad,
       dia,
       lugar,
       mes_bucket,
-      tweet,
+      
   ]
 
   deep_columns = [
