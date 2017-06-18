@@ -15,7 +15,7 @@ def generate_experiment_fn(train_files,
                            eval_batch_size=40,
                            embedding_size=8,
                            first_layer_size=100,
-                           num_layers=11,
+                           num_layers=12,
                            scale_factor=0.7,
                            **experiment_args):
   """Create an experiment function given hyperparameters.
