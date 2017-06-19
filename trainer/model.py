@@ -44,7 +44,6 @@ INPUT_COLUMNS = [
 	layers.real_valued_column('mes'),
 	layers.sparse_column_with_hash_bucket('pais', hash_bucket_size=1000),
     
-
     # Continuous base columns.
         
     
