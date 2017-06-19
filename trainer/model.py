@@ -42,7 +42,7 @@ INPUT_COLUMNS = [
     layers.sparse_column_with_hash_bucket('dia', hash_bucket_size=1000),
     layers.sparse_column_with_hash_bucket('lugar', hash_bucket_size=1000),
 	layers.real_valued_column('mes'),
-	  
+	layers.sparse_column_with_hash_bucket('pais', hash_bucket_size=1000),
     
 
     # Continuous base columns.

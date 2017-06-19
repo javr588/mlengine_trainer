@@ -112,7 +112,7 @@ if __name__ == '__main__':
   parser.add_argument(
       '--eval-steps',
       help='Number of steps to run evalution for at each checkpoint',
-      default=100,
+      default=10000,
       type=int
   )
   parser.add_argument(
