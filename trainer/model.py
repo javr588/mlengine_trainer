@@ -96,12 +96,10 @@ def build_estimator(model_dir, embedding_size=8, hidden_units=None):
       layers.crossed_column(
           [actividad, lugar], hash_bucket_size=int(1e4)),
       layers.crossed_column(
-          [actividad,mes_bucket,dia], hash_bucket_size=int(1e6)),
+          [actividad,mes_bucket], hash_bucket_size=int(1e4)),
       layers.crossed_column(
           [actividad, dia], hash_bucket_size=int(1e4)),
-	  layers.crossed_column(
-          [lugar, dia], hash_bucket_size=int(1e4)),
-      actividad,
+	  actividad,
       dia,
       lugar,
       mes_bucket,
