@@ -41,10 +41,9 @@ INPUT_COLUMNS = [
 	layers.real_valued_column('bueno'),
     layers.sparse_column_with_hash_bucket('dia', hash_bucket_size=100),
     layers.sparse_column_with_hash_bucket('lugar', hash_bucket_size=1000),
-	layers.real_valued_column('malo'),
+	
     layers.real_valued_column('mes'),
-	layers.real_valued_column('regular'),
-    layers.real_valued_column('tedioso'),
+	
     
     
 
@@ -81,7 +80,7 @@ def build_estimator(model_dir, embedding_size=8, hidden_units=None):
   Returns:
     A DNNCombinedLinearClassifier
   """
-  (actividad,anio,bueno,dia,lugar,malo,mes,regular,tedioso) = INPUT_COLUMNS
+  (actividad,anio,bueno,dia,lugar,mes) = INPUT_COLUMNS
   """Build an estimator."""
 
   # Reused Transformations.
@@ -116,9 +115,7 @@ def build_estimator(model_dir, embedding_size=8, hidden_units=None):
       anio,
       mes,
       bueno,
-      malo,
-      tedioso,
-      regular,
+     
   ]
 
   return tf.contrib.learn.DNNLinearCombinedClassifier(
